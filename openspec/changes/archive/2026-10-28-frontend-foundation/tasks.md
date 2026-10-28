@@ -46,7 +46,7 @@
 ## 7. Documentation and CI
 
 - [x] 7.1 Write `README.md`: requirements, setup with `lumior-be` (including its `CORS_ALLOWED_ORIGINS`), scripts, `api:generate`, folder layout and the `routes -> features -> lib` rule, and the money rules; verify the setup steps work from a fresh clone
-- [ ] 7.2 Add `.github/workflows/ci.yml` running `npm ci`, `lint`, `format:check`, `typecheck`, `test`, and `build` on push and pull request; verify the workflow passes on a pushed branch
+- [x] 7.2 Add `.github/workflows/ci.yml` running `npm ci`, `lint`, `format:check`, `typecheck`, `test`, and `build` on push and pull request; verify the workflow passes on a pushed branch
 
 ## 8. Integration check
 
