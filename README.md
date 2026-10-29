@@ -34,6 +34,16 @@ and validated at startup. An invalid value shows a configuration error screen in
 | Variable            | Example                 | Notes                                                     |
 | ------------------- | ----------------------- | --------------------------------------------------------- |
 | `VITE_API_BASE_URL` | `http://localhost:8000` | Backend origin, required. API calls go to `<this>/api/v1` |
+| `VITE_API_MOCKING`  | `true`                  | Development only: serve the API from the mock (below)     |
+
+### Mock mode (no backend)
+
+With `VITE_API_MOCKING=true` in `.env.local`, `npm run dev` starts an MSW service worker
+(`public/mockServiceWorker.js`) that answers API calls from the in-memory fake backend in
+`tests/msw/fake-backend.ts`, the same one the tests use. Sign in as `demo@lumior.test` /
+`password123`. Mock data is kept in `localStorage` (`lumior.mock.state`); remove that key to start
+over. Production builds never include the mock: it is imported only when `import.meta.env.DEV` is
+true.
 
 ## Scripts
 
@@ -66,21 +76,59 @@ OPENAPI_SOURCE=./openapi.json npm run api:generate       # from a file
 
 A backend change that breaks the frontend then shows up as a `npm run typecheck` error.
 
+### Draft contracts
+
+When the frontend needs endpoints the backend has not built yet, the proposed contract lives in
+`contracts/`: a readable version for the backend team (`contracts/auth-and-households.md`) and
+an OpenAPI document (`contracts/openapi.json`). The committed types are generated from the draft
+until the backend publishes the real document:
+
+```bash
+OPENAPI_SOURCE=contracts/openapi.json npm run api:generate
+```
+
+Once `lumior-be` implements the contract, run `npm run api:generate` against it, fix any type
+errors, and delete the draft.
+
 ## Layout
 
 ```
 src/
-  main.tsx          entry: validates config, renders the app or the config error screen
-  app/              providers, router, layout, error page, document title
+  main.tsx          entry: validates config, starts the dev mock if enabled, renders the app
+  app/              providers, router, route guards, layout, error page, document title
   routes/           one thin page component per area
-  features/<name>/  API hooks, components, and schemas for one area (added per feature)
+  features/<name>/  API hooks, components, and schemas for one area
+    auth/           session restore, sign-in and registration pages, sign-out
+    account/        account settings (display name, password)
+    households/     households list, active household, settings, invites
   components/       shared components; ui/ holds shadcn/ui primitives
   lib/
     api/            typed client, ApiError, retry policy, health check, generated schema
+    auth/           in-memory session store, session hooks, account field rules
     money/          money formatting and input parsing
     config.ts       environment validation
-tests/              test setup, MSW server and handlers, render helpers
+    forms.ts        zod and API errors mapped onto form fields
+tests/              test setup, MSW fake backend and handlers, render helpers
+contracts/          draft API contracts the backend has not published yet
 ```
+
+### Routes and guards
+
+```
+/login, /register              public only (a signed-in user is sent on)
+everything else                needs a session (signed-out visitors go to /login?next=...)
+  /welcome, /invite/:code      no household needed, no sidebar
+  app areas, /household, /account, not found
+                               need an active household (otherwise /welcome)
+```
+
+### Households
+
+Every signed-in page can read the active household with `useActiveHousehold()` from
+`features/households/context`. Data that belongs to one household must use a query key that
+starts with `householdKey(householdId)` (`['household', id, ...]`): switching households removes
+those queries, so one household's data never shows up in another. Requests that fail with
+`not_a_member` or `household_not_found` make the app reload the list and choose another household.
 
 ### Dependency rule
 
@@ -110,6 +158,12 @@ routes -> features -> lib, components
 - Each request carries a fresh `X-Request-ID`, times out after 15 seconds, and is sent with
   credentials. Failed GET requests are retried up to twice on network errors, timeouts, and 5xx
   responses. Writes are never retried automatically.
+- While the user is signed in, requests carry `Authorization: Bearer <access token>` (never
+  requests to `/api/v1/auth/*`). The token lives only in memory (`src/lib/auth/session.ts`); the
+  refresh token is an httpOnly cookie set by the backend. When a request gets 401, the client
+  refreshes the token once (parallel requests share one refresh) and sends the request once more,
+  writes included, because the backend rejected it before doing anything. If the refresh is
+  rejected, the session ends and the user sees the sign-in page.
 
 ### Money
 

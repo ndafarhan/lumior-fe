@@ -34,6 +34,7 @@ describe('sidebar navigation', () => {
   test('clicking a link navigates without a reload and marks the link active', async () => {
     const user = userEvent.setup()
     const { router } = renderApp('/')
+    await screen.findByRole('heading', { level: 1, name: 'Dashboard' })
     const documentBefore = document
 
     await user.click(within(sidebar()).getByRole('link', { name: 'Budgets' }))
@@ -64,7 +65,7 @@ describe('sidebar navigation', () => {
     const user = userEvent.setup()
     renderApp('/')
 
-    await user.click(screen.getByRole('button', { name: 'Open menu' }))
+    await user.click(await screen.findByRole('button', { name: 'Open menu' }))
     const menu = await screen.findByRole('dialog')
     const links = within(within(menu).getByRole('navigation', { name: 'Menu' })).getAllByRole(
       'link',

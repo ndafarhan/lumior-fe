@@ -8,6 +8,8 @@ import { TEST_API_BASE_URL } from '../../../tests/constants'
 import { server } from '../../../tests/msw/server'
 import { TEST_CONFIG, createTestQueryClient, renderApp } from '../../../tests/render-app'
 
+import { createSessionStore } from '@/lib/auth/session'
+
 import { createApiClient } from './client'
 import { ApiContext } from './context'
 import { HEALTH_POLL_INTERVAL_MS, useBackendHealth } from './health'
@@ -16,7 +18,13 @@ const READY_URL = `${TEST_API_BASE_URL}/health/ready`
 
 function wrapper({ children }: { children: ReactNode }) {
   return (
-    <ApiContext value={{ client: createApiClient(TEST_CONFIG.apiBaseUrl), config: TEST_CONFIG }}>
+    <ApiContext
+      value={{
+        client: createApiClient(TEST_CONFIG.apiBaseUrl),
+        config: TEST_CONFIG,
+        session: createSessionStore({ refresh: vi.fn() }),
+      }}
+    >
       <QueryClientProvider client={createTestQueryClient()}>{children}</QueryClientProvider>
     </ApiContext>
   )
