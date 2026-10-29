@@ -1,39 +1,68 @@
 import { createBrowserRouter, type RouteObject } from 'react-router'
 
+import { PublicOnlyRoute, RequireHousehold, RequireSession, RootRoute } from '@/app/guards'
 import { AppLayout } from '@/app/layout/AppLayout'
 import { RouteErrorPage } from '@/app/RouteErrorPage'
 import type { RouteHandle } from '@/app/useDocumentTitle'
+import { LoginPage } from '@/features/auth/LoginPage'
+import { RegisterPage } from '@/features/auth/RegisterPage'
+import { InvitePage } from '@/features/households/InvitePage'
+import { AccountPage } from '@/routes/account'
 import { BudgetsPage } from '@/routes/budgets'
 import { CatalogPage } from '@/routes/catalog'
 import { DashboardPage } from '@/routes/dashboard'
 import { ExpensesPage } from '@/routes/expenses'
+import { HouseholdPage } from '@/routes/household'
 import { NotFoundPage } from '@/routes/not-found'
 import { OptimizePage } from '@/routes/optimize'
 import { ShoppingListsPage } from '@/routes/shopping-lists'
+import { WelcomePage } from '@/routes/welcome'
 
 const page = (title: string): RouteHandle => ({ title })
 
+/** Pages inside the app layout: they need a session and an active household. */
+const layoutPages: RouteObject[] = [
+  { index: true, element: <DashboardPage />, handle: page('Dashboard') },
+  { path: 'budgets', element: <BudgetsPage />, handle: page('Budgets') },
+  { path: 'expenses', element: <ExpensesPage />, handle: page('Expenses') },
+  { path: 'catalog', element: <CatalogPage />, handle: page('Catalog') },
+  { path: 'shopping-lists', element: <ShoppingListsPage />, handle: page('Shopping Lists') },
+  { path: 'optimize', element: <OptimizePage />, handle: page('Optimize') },
+  { path: 'household', element: <HouseholdPage />, handle: page('Household settings') },
+  { path: 'account', element: <AccountPage />, handle: page('Account') },
+  { path: '*', element: <NotFoundPage />, handle: page('Page not found') },
+]
+
 export const appRoutes: RouteObject[] = [
   {
-    element: <AppLayout />,
-    // Last resort if the layout itself fails.
+    element: <RootRoute />,
+    // Last resort if a guard or the layout itself fails.
     errorElement: <RouteErrorPage />,
     children: [
       {
-        // Page errors render inside the layout, so the sidebar keeps working.
-        errorElement: <RouteErrorPage />,
+        element: <PublicOnlyRoute />,
         children: [
-          { index: true, element: <DashboardPage />, handle: page('Dashboard') },
-          { path: 'budgets', element: <BudgetsPage />, handle: page('Budgets') },
-          { path: 'expenses', element: <ExpensesPage />, handle: page('Expenses') },
-          { path: 'catalog', element: <CatalogPage />, handle: page('Catalog') },
+          { path: 'login', element: <LoginPage />, handle: page('Sign in') },
+          { path: 'register', element: <RegisterPage />, handle: page('Create account') },
+        ],
+      },
+      {
+        element: <RequireSession />,
+        children: [
+          { path: 'welcome', element: <WelcomePage />, handle: page('Welcome') },
+          { path: 'invite/:code', element: <InvitePage />, handle: page('Invitation') },
           {
-            path: 'shopping-lists',
-            element: <ShoppingListsPage />,
-            handle: page('Shopping Lists'),
+            element: <RequireHousehold />,
+            children: [
+              {
+                element: <AppLayout />,
+                children: [
+                  // Page errors render inside the layout, so the sidebar keeps working.
+                  { errorElement: <RouteErrorPage />, children: layoutPages },
+                ],
+              },
+            ],
           },
-          { path: 'optimize', element: <OptimizePage />, handle: page('Optimize') },
-          { path: '*', element: <NotFoundPage />, handle: page('Page not found') },
         ],
       },
     ],

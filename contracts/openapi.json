@@ -1,0 +1,1098 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "Lumior API",
+    "version": "0.1.0",
+    "description": "DRAFT contract proposed by lumior-fe (auth-and-households). See contracts/auth-and-households.md. Replace with the backend's published document once it exists."
+  },
+  "paths": {
+    "/api/v1/auth/register": {
+      "post": {
+        "operationId": "auth_register",
+        "summary": "Create an account and sign in",
+        "tags": ["auth"],
+        "security": [],
+        "responses": {
+          "201": {
+            "description": "Account created and signed in.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Session"
+                }
+              }
+            },
+            "headers": {
+              "Set-Cookie": {
+                "description": "Refresh token: HttpOnly; Secure (outside local development); SameSite=Lax; Path=/api/v1/auth.",
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "`email_taken`.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation error (`validation_error`).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RegisterRequest"
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/auth/login": {
+      "post": {
+        "operationId": "auth_login",
+        "summary": "Sign in",
+        "tags": ["auth"],
+        "security": [],
+        "responses": {
+          "200": {
+            "description": "Signed in.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Session"
+                }
+              }
+            },
+            "headers": {
+              "Set-Cookie": {
+                "description": "Refresh token: HttpOnly; Secure (outside local development); SameSite=Lax; Path=/api/v1/auth.",
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "`invalid_credentials`.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation error (`validation_error`).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/LoginRequest"
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/auth/refresh": {
+      "post": {
+        "operationId": "auth_refresh",
+        "summary": "Exchange the refresh cookie for a new session",
+        "tags": ["auth"],
+        "security": [
+          {
+            "refreshCookie": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "New session; the refresh cookie is rotated.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Session"
+                }
+              }
+            },
+            "headers": {
+              "Set-Cookie": {
+                "description": "Refresh token: HttpOnly; Secure (outside local development); SameSite=Lax; Path=/api/v1/auth.",
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "`invalid_refresh_token`.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/auth/logout": {
+      "post": {
+        "operationId": "auth_logout",
+        "summary": "Sign out",
+        "tags": ["auth"],
+        "security": [
+          {
+            "refreshCookie": []
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Refresh token revoked and cookie cleared.",
+            "headers": {
+              "Set-Cookie": {
+                "description": "Refresh token: HttpOnly; Secure (outside local development); SameSite=Lax; Path=/api/v1/auth.",
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/me": {
+      "get": {
+        "operationId": "identity_get_me",
+        "summary": "Get the current user",
+        "tags": ["identity"],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Current user.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/User"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing, invalid, or expired access token (`unauthorized`).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      },
+      "patch": {
+        "operationId": "identity_update_me",
+        "summary": "Update the current user",
+        "tags": ["identity"],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Updated user.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/User"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing, invalid, or expired access token (`unauthorized`).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation error (`validation_error`).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateMeRequest"
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/me/password": {
+      "post": {
+        "operationId": "identity_change_password",
+        "summary": "Change the password",
+        "tags": ["identity"],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Password changed. The calling session stays valid."
+          },
+          "400": {
+            "description": "`invalid_current_password`.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing, invalid, or expired access token (`unauthorized`).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation error (`validation_error`).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ChangePasswordRequest"
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/households": {
+      "get": {
+        "operationId": "households_list",
+        "summary": "List the user's households (oldest membership first)",
+        "tags": ["households"],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Households.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/Household"
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing, invalid, or expired access token (`unauthorized`).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "operationId": "households_create",
+        "summary": "Create a household owned by the user",
+        "tags": ["households"],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "responses": {
+          "201": {
+            "description": "Created household.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Household"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing, invalid, or expired access token (`unauthorized`).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation error (`validation_error`).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/HouseholdNameRequest"
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/households/{household_id}": {
+      "patch": {
+        "operationId": "households_update",
+        "summary": "Rename a household (owner only)",
+        "tags": ["households"],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Updated household.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Household"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing, invalid, or expired access token (`unauthorized`).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "`not_a_member` or `owner_required`.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "`household_not_found`.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation error (`validation_error`).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/HouseholdNameRequest"
+              }
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "household_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Household ID."
+          }
+        ]
+      }
+    },
+    "/api/v1/households/{household_id}/members": {
+      "get": {
+        "operationId": "households_list_members",
+        "summary": "List members",
+        "tags": ["households"],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Members.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/Member"
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing, invalid, or expired access token (`unauthorized`).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "`not_a_member` or `owner_required`.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "`household_not_found`.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "household_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Household ID."
+          }
+        ]
+      }
+    },
+    "/api/v1/households/{household_id}/members/{user_id}": {
+      "delete": {
+        "operationId": "households_remove_member",
+        "summary": "Remove a member (owner) or leave (own user ID)",
+        "tags": ["households"],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Member removed."
+          },
+          "401": {
+            "description": "Missing, invalid, or expired access token (`unauthorized`).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "`not_a_member` or `owner_required`.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "`household_not_found` or `member_not_found`.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "`owner_cannot_leave`.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "household_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Household ID."
+          },
+          {
+            "name": "user_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "description": "User ID of the member."
+          }
+        ]
+      }
+    },
+    "/api/v1/households/{household_id}/invites": {
+      "post": {
+        "operationId": "households_create_invite",
+        "summary": "Create a single-use invite (owner only)",
+        "tags": ["households"],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "responses": {
+          "201": {
+            "description": "Invite.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Invite"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing, invalid, or expired access token (`unauthorized`).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "`not_a_member` or `owner_required`.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "`household_not_found`.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "household_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Household ID."
+          }
+        ]
+      }
+    },
+    "/api/v1/invites/{code}": {
+      "get": {
+        "operationId": "households_get_invite",
+        "summary": "Preview an invite",
+        "tags": ["households"],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Invite preview.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InvitePreview"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing, invalid, or expired access token (`unauthorized`).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "`invite_not_found`.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "410": {
+            "description": "`invite_expired` or `invite_used`.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "code",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Invite code."
+          }
+        ]
+      }
+    },
+    "/api/v1/invites/{code}/accept": {
+      "post": {
+        "operationId": "households_accept_invite",
+        "summary": "Join the household of an invite",
+        "tags": ["households"],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Joined household.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Household"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing, invalid, or expired access token (`unauthorized`).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "`invite_not_found`.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "`already_member`.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "410": {
+            "description": "`invite_expired` or `invite_used`.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "code",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Invite code."
+          }
+        ]
+      }
+    }
+  },
+  "components": {
+    "securitySchemes": {
+      "bearerAuth": {
+        "type": "http",
+        "scheme": "bearer"
+      },
+      "refreshCookie": {
+        "type": "apiKey",
+        "in": "cookie",
+        "name": "lumior_refresh"
+      }
+    },
+    "schemas": {
+      "ErrorDetail": {
+        "type": "object",
+        "additionalProperties": true
+      },
+      "ErrorBody": {
+        "type": "object",
+        "required": ["code", "message", "details", "request_id"],
+        "properties": {
+          "code": {
+            "type": "string"
+          },
+          "message": {
+            "type": "string"
+          },
+          "details": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ErrorDetail"
+            }
+          },
+          "request_id": {
+            "type": "string"
+          }
+        }
+      },
+      "ErrorResponse": {
+        "type": "object",
+        "required": ["error"],
+        "properties": {
+          "error": {
+            "$ref": "#/components/schemas/ErrorBody"
+          }
+        }
+      },
+      "User": {
+        "type": "object",
+        "required": ["id", "email", "name"],
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "email": {
+            "type": "string",
+            "format": "email"
+          },
+          "name": {
+            "type": "string"
+          }
+        }
+      },
+      "Session": {
+        "type": "object",
+        "required": ["access_token", "token_type", "expires_in", "user"],
+        "properties": {
+          "access_token": {
+            "type": "string"
+          },
+          "token_type": {
+            "type": "string",
+            "const": "bearer"
+          },
+          "expires_in": {
+            "type": "integer",
+            "description": "Seconds until the access token expires."
+          },
+          "user": {
+            "$ref": "#/components/schemas/User"
+          }
+        }
+      },
+      "RegisterRequest": {
+        "type": "object",
+        "required": ["name", "email", "password"],
+        "properties": {
+          "name": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 100,
+            "description": "1-100 characters after trimming."
+          },
+          "email": {
+            "type": "string",
+            "format": "email"
+          },
+          "password": {
+            "type": "string",
+            "minLength": 8,
+            "maxLength": 128
+          }
+        }
+      },
+      "LoginRequest": {
+        "type": "object",
+        "required": ["email", "password"],
+        "properties": {
+          "email": {
+            "type": "string"
+          },
+          "password": {
+            "type": "string"
+          }
+        }
+      },
+      "UpdateMeRequest": {
+        "type": "object",
+        "required": ["name"],
+        "properties": {
+          "name": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 100,
+            "description": "1-100 characters after trimming."
+          }
+        }
+      },
+      "ChangePasswordRequest": {
+        "type": "object",
+        "required": ["current_password", "new_password"],
+        "properties": {
+          "current_password": {
+            "type": "string"
+          },
+          "new_password": {
+            "type": "string",
+            "minLength": 8,
+            "maxLength": 128
+          }
+        }
+      },
+      "Role": {
+        "type": "string",
+        "enum": ["owner", "member"]
+      },
+      "Household": {
+        "type": "object",
+        "required": ["id", "name", "role", "member_count"],
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "role": {
+            "$ref": "#/components/schemas/Role"
+          },
+          "member_count": {
+            "type": "integer"
+          }
+        }
+      },
+      "HouseholdNameRequest": {
+        "type": "object",
+        "required": ["name"],
+        "properties": {
+          "name": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 100,
+            "description": "1-100 characters after trimming."
+          }
+        }
+      },
+      "Member": {
+        "type": "object",
+        "required": ["user_id", "name", "email", "role"],
+        "properties": {
+          "user_id": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "email": {
+            "type": "string",
+            "format": "email"
+          },
+          "role": {
+            "$ref": "#/components/schemas/Role"
+          }
+        }
+      },
+      "Invite": {
+        "type": "object",
+        "required": ["code", "expires_at"],
+        "properties": {
+          "code": {
+            "type": "string"
+          },
+          "expires_at": {
+            "type": "string",
+            "format": "date-time"
+          }
+        }
+      },
+      "InvitePreview": {
+        "type": "object",
+        "required": [
+          "household_id",
+          "household_name",
+          "invited_by",
+          "expires_at",
+          "already_member"
+        ],
+        "properties": {
+          "household_id": {
+            "type": "string"
+          },
+          "household_name": {
+            "type": "string"
+          },
+          "invited_by": {
+            "type": "string"
+          },
+          "expires_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "already_member": {
+            "type": "boolean"
+          }
+        }
+      }
+    }
+  }
+}

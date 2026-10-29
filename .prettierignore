@@ -4,3 +4,4 @@ package-lock.json
 src/lib/api/schema.d.ts
 openspec
 .claude
+public/mockServiceWorker.js

@@ -5,6 +5,7 @@ import { describe, expect, test, vi } from 'vitest'
 
 import { renderApp } from '../../tests/render-app'
 
+import { RequireHousehold, RequireSession } from './guards'
 import { AppLayout } from './layout/AppLayout'
 import { RouteErrorPage } from './RouteErrorPage'
 import { ApiError } from '@/lib/api/errors'
@@ -36,17 +37,27 @@ describe('not found', () => {
   })
 })
 
-/** The real layout and error boundary around a page that throws. */
+/** The real guards, layout, and error boundary around a page that throws. */
 function routesWithPage(Page: () => React.ReactNode): RouteObject[] {
   return [
     {
-      element: <AppLayout />,
+      element: <RequireSession />,
       children: [
         {
-          errorElement: <RouteErrorPage />,
+          element: <RequireHousehold />,
           children: [
-            { index: true, element: <DashboardPage />, handle: { title: 'Dashboard' } },
-            { path: 'broken', element: <Page />, handle: { title: 'Broken' } },
+            {
+              element: <AppLayout />,
+              children: [
+                {
+                  errorElement: <RouteErrorPage />,
+                  children: [
+                    { index: true, element: <DashboardPage />, handle: { title: 'Dashboard' } },
+                    { path: 'broken', element: <Page />, handle: { title: 'Broken' } },
+                  ],
+                },
+              ],
+            },
           ],
         },
       ],
@@ -61,7 +72,7 @@ describe('error boundary', () => {
     function Broken(): React.ReactNode {
       throw new TypeError('boom')
     }
-    renderApp('/broken', routesWithPage(Broken))
+    renderApp('/broken', { routes: routesWithPage(Broken) })
 
     const alert = await screen.findByRole('alert')
     expect(within(alert).getByRole('heading', { name: 'Something went wrong' })).toBeInTheDocument()
@@ -82,7 +93,7 @@ describe('error boundary', () => {
     function Broken(): React.ReactNode {
       throw new ApiError({ kind: 'http', status: 500, message: 'x', requestId: 'r-42' })
     }
-    renderApp('/broken', routesWithPage(Broken))
+    renderApp('/broken', { routes: routesWithPage(Broken) })
 
     const alert = await screen.findByRole('alert')
     expect(within(alert).getByText('r-42')).toBeInTheDocument()
@@ -97,7 +108,7 @@ describe('error boundary', () => {
       if (fail) throw new TypeError('boom')
       return <h1>Recovered</h1>
     }
-    renderApp('/broken', routesWithPage(Flaky))
+    renderApp('/broken', { routes: routesWithPage(Flaky) })
     await screen.findByRole('alert')
 
     fail = false
@@ -117,6 +128,7 @@ describe('document title', () => {
   test('follows navigation', async () => {
     const user = userEvent.setup()
     renderApp('/')
+    await screen.findByRole('heading', { level: 1, name: 'Dashboard' })
     await waitFor(() => expect(document.title).toBe('Dashboard · Lumior'))
 
     await user.click(
@@ -126,6 +138,24 @@ describe('document title', () => {
     )
 
     await waitFor(() => expect(document.title).toBe('Expenses · Lumior'))
+  })
+
+  test.each([
+    ['/account', 'Account · Lumior'],
+    ['/household', 'Household settings · Lumior'],
+  ])('%s is titled "%s"', async (path, title) => {
+    renderApp(path)
+
+    await waitFor(() => expect(document.title).toBe(title))
+  })
+
+  test.each([
+    ['/login', 'Sign in · Lumior'],
+    ['/register', 'Create account · Lumior'],
+  ])('%s is titled "%s" for a signed-out visitor', async (path, title) => {
+    renderApp(path, { session: null })
+
+    await waitFor(() => expect(document.title).toBe(title))
   })
 
   test('names the not-found page', async () => {

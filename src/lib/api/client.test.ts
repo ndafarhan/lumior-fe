@@ -145,7 +145,7 @@ describe('createApiClient', () => {
     server.use(http.get(`${BASE}/api/v1/ping`, () => HttpResponse.json({ pong: true })))
     const client = createApiClient(BASE)
 
-    // No business endpoints exist in the generated schema yet, so the path is untyped here.
+    // `/ping` is not in the generated schema, so the path is untyped here.
     const { data } = await client.GET('/api/v1/ping' as never)
 
     expect(data).toEqual({ pong: true })

@@ -8,7 +8,7 @@ import globals from 'globals'
 import tseslint from 'typescript-eslint'
 
 export default defineConfig([
-  globalIgnores(['dist', 'coverage', 'src/lib/api/schema.d.ts']),
+  globalIgnores(['dist', 'coverage', 'src/lib/api/schema.d.ts', 'public/mockServiceWorker.js']),
   {
     files: ['**/*.{ts,tsx}'],
     extends: [
