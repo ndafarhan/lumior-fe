@@ -2,6 +2,7 @@ import { screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { describe, expect, test } from 'vitest'
 
+import { captureRequests } from '../../tests/msw/capture'
 import { fakeBackend } from '../../tests/msw/handlers'
 import { renderApp } from '../../tests/render-app'
 
@@ -33,6 +34,37 @@ describe('household onboarding', () => {
       expect.objectContaining({ userId: seeded!.user.id, role: 'owner' }),
     ])
     expect(localStorage.getItem(`lumior.activeHousehold.${seeded!.user.id}`)).toBe(created.id)
+  })
+
+  test('the currency defaults to IDR', async () => {
+    const user = userEvent.setup()
+    const requests = captureRequests('POST', /\/api\/v1\/households$/)
+    renderApp('/welcome', { session: { households: [] } })
+    await onboardingHeading()
+
+    expect(screen.getByLabelText('Currency')).toHaveValue('IDR')
+    await user.type(screen.getByLabelText('Household name'), 'Rumah Bandung')
+    await user.click(screen.getByRole('button', { name: 'Create household' }))
+
+    await screen.findByRole('heading', { level: 1, name: 'Dashboard' })
+    expect((await requests.all()).map((r) => r.body)).toEqual([
+      { name: 'Rumah Bandung', currency: 'IDR' },
+    ])
+    expect(fakeBackend.state.households[0]!.currency).toBe('IDR')
+  })
+
+  test('another currency can be chosen', async () => {
+    const user = userEvent.setup()
+    renderApp('/welcome', { session: { households: [] } })
+    await onboardingHeading()
+
+    await user.type(screen.getByLabelText('Household name'), 'Flat Singapore')
+    await user.selectOptions(screen.getByLabelText('Currency'), 'SGD')
+    await user.click(screen.getByRole('button', { name: 'Create household' }))
+
+    await screen.findByRole('heading', { level: 1, name: 'Dashboard' })
+    const created = fakeBackend.state.households.find((h) => h.name === 'Flat Singapore')!
+    expect(created.currency).toBe('SGD')
   })
 
   test('a blank name is reported without sending a request', async () => {

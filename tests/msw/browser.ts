@@ -28,12 +28,35 @@ function saveState(state: FakeState) {
   }
 }
 
+/** The local calendar date `daysAgo` days before today, as `YYYY-MM-DD`. */
+function localDate(daysAgo: number) {
+  const date = new Date()
+  date.setDate(date.getDate() - daysAgo)
+  const pad = (value: number) => String(value).padStart(2, '0')
+  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}`
+}
+
+/** A few recent expenses, so the Expenses page has something to show. */
+function seedDemoExpenses(backend: FakeBackend, householdId: string) {
+  const expenses = [
+    { daysAgo: 12, amount: '350000', category: 'Utilities', note: 'Electricity' },
+    { daysAgo: 6, amount: '185000', category: 'Groceries', note: 'Weekly market' },
+    { daysAgo: 3, amount: '42500', category: 'Dining out', note: null },
+    { daysAgo: 1, amount: '25000', category: 'Transport', note: 'Ride to the office' },
+    { daysAgo: 0, amount: '96750', category: 'Groceries', note: null },
+  ]
+  for (const { daysAgo, ...expense } of expenses) {
+    backend.addExpense(householdId, { ...expense, spentOn: localDate(daysAgo) })
+  }
+}
+
 /** Starts the MSW worker that answers requests to `apiBaseUrl` from the fake backend. */
 export async function startMockWorker(apiBaseUrl: string) {
   const backend = new FakeBackend()
   if (!loadState(backend)) {
     const demo = backend.addUser(DEMO_USER)
-    backend.addHousehold('Demo Household', demo.id)
+    const household = backend.addHousehold('Demo Household', demo.id)
+    seedDemoExpenses(backend, household.id)
   }
   backend.onChange = saveState
   saveState(backend.state)

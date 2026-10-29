@@ -227,6 +227,94 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/households/{household_id}/expense-categories": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List the household's expense categories, active and archived, by name */
+        get: operations["expenses_list_categories"];
+        put?: never;
+        /** Add an expense category */
+        post: operations["expenses_create_category"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/households/{household_id}/expense-categories/{category_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /** Rename, archive, or restore an expense category */
+        patch: operations["expenses_update_category"];
+        trace?: never;
+    };
+    "/api/v1/households/{household_id}/expenses": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List a month's expenses, newest first */
+        get: operations["expenses_list"];
+        put?: never;
+        /** Record an expense */
+        post: operations["expenses_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/households/{household_id}/expenses/{expense_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /** Delete an expense */
+        delete: operations["expenses_delete"];
+        options?: never;
+        head?: never;
+        /** Change an expense */
+        patch: operations["expenses_update"];
+        trace?: never;
+    };
+    "/api/v1/households/{household_id}/expense-summary": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Total and per-category totals of a month's expenses */
+        get: operations["expenses_get_summary"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -283,6 +371,8 @@ export interface components {
             name: string;
             role: components["schemas"]["Role"];
             member_count: number;
+            /** @description The household's currency, set when it is created. Every expense uses it. */
+            currency: string;
         };
         HouseholdNameRequest: {
             /** @description 1-100 characters after trimming. */
@@ -307,6 +397,86 @@ export interface components {
             /** Format: date-time */
             expires_at: string;
             already_member: boolean;
+        };
+        Money: {
+            /** @description Decimal string, rounded to the currency's precision. Never a JSON number. */
+            amount: string;
+            /** @description ISO 4217 code. */
+            currency: string;
+        };
+        CreateHouseholdRequest: {
+            /** @description 1-100 characters after trimming. */
+            name: string;
+            /** @description A supported currency (CURRENCY_PRECISION). Defaults to IDR. Cannot be changed later. */
+            currency?: string;
+        };
+        ExpenseCategory: {
+            id: string;
+            name: string;
+            archived: boolean;
+        };
+        CreateExpenseCategoryRequest: {
+            /** @description 1-50 characters after trimming. Unique in the household, ignoring case. */
+            name: string;
+        };
+        UpdateExpenseCategoryRequest: {
+            /** @description 1-50 characters after trimming. Unique in the household, ignoring case. */
+            name?: string;
+            archived?: boolean;
+        };
+        Expense: {
+            id: string;
+            amount: components["schemas"]["Money"];
+            /** Format: date */
+            spent_on: string;
+            category_id: string;
+            note: string | null;
+            /** Format: date-time */
+            created_at: string;
+            /** Format: date-time */
+            updated_at: string;
+        };
+        CreateExpenseRequest: {
+            /** @description Greater than 0, at most 12 digits before the decimal point, in the household currency. */
+            amount: components["schemas"]["Money"];
+            /**
+             * Format: date
+             * @description Not before 2000-01-01 and not more than one day after the server's UTC date.
+             */
+            spent_on: string;
+            /** @description An active category of the household. */
+            category_id: string;
+            /** @description At most 500 characters after trimming. Empty is stored as null. */
+            note?: string | null;
+        };
+        UpdateExpenseRequest: {
+            /** @description Greater than 0, at most 12 digits before the decimal point, in the household currency. */
+            amount?: components["schemas"]["Money"];
+            /**
+             * Format: date
+             * @description Not before 2000-01-01 and not more than one day after the server's UTC date.
+             */
+            spent_on?: string;
+            /** @description Changing it to an archived category is `category_archived`. */
+            category_id?: string;
+            /** @description At most 500 characters after trimming. Empty is stored as null. */
+            note?: string | null;
+        };
+        ExpensePage: {
+            items: components["schemas"]["Expense"][];
+            /** @description Opaque. Pass as `cursor` for the next page. Null on the last page. */
+            next_cursor: string | null;
+        };
+        ExpenseCategoryTotal: {
+            category_id: string;
+            total: components["schemas"]["Money"];
+            count: number;
+        };
+        ExpenseSummary: {
+            month: string;
+            total: components["schemas"]["Money"];
+            /** @description Categories with expenses in the month, highest total first. */
+            categories: components["schemas"]["ExpenseCategoryTotal"][];
         };
     };
     responses: never;
@@ -614,7 +784,7 @@ export interface operations {
         };
         requestBody: {
             content: {
-                "application/json": components["schemas"]["HouseholdNameRequest"];
+                "application/json": components["schemas"]["CreateHouseholdRequest"];
             };
         };
         responses: {
@@ -969,6 +1139,510 @@ export interface operations {
             };
             /** @description `invite_expired` or `invite_used`. */
             410: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    expenses_list_categories: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Household ID. */
+                household_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Categories. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ExpenseCategory"][];
+                };
+            };
+            /** @description Missing, invalid, or expired access token (`unauthorized`). */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description `not_a_member`. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description `household_not_found`. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    expenses_create_category: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Household ID. */
+                household_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreateExpenseCategoryRequest"];
+            };
+        };
+        responses: {
+            /** @description Created category. */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ExpenseCategory"];
+                };
+            };
+            /** @description Missing, invalid, or expired access token (`unauthorized`). */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description `not_a_member`. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description `household_not_found`. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description `category_name_taken`. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Validation error (`validation_error`). */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    expenses_update_category: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Household ID. */
+                household_id: string;
+                /** @description Expense category ID. */
+                category_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UpdateExpenseCategoryRequest"];
+            };
+        };
+        responses: {
+            /** @description Updated category. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ExpenseCategory"];
+                };
+            };
+            /** @description Missing, invalid, or expired access token (`unauthorized`). */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description `not_a_member`. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description `household_not_found` or `category_not_found`. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description `category_name_taken`. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Validation error (`validation_error`). */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    expenses_list: {
+        parameters: {
+            query: {
+                /** @description Calendar month of `spent_on`, `YYYY-MM`. */
+                month: string;
+                /** @description Only this category's expenses. */
+                category_id?: string;
+                /** @description `next_cursor` of the previous page. */
+                cursor?: string;
+                /** @description Page size. */
+                limit?: number;
+            };
+            header?: never;
+            path: {
+                /** @description Household ID. */
+                household_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description A page of expenses. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ExpensePage"];
+                };
+            };
+            /** @description Missing, invalid, or expired access token (`unauthorized`). */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description `not_a_member`. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description `household_not_found`. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Validation error (`validation_error`). */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    expenses_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Household ID. */
+                household_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreateExpenseRequest"];
+            };
+        };
+        responses: {
+            /** @description Created expense. */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Expense"];
+                };
+            };
+            /** @description Missing, invalid, or expired access token (`unauthorized`). */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description `not_a_member`. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description `household_not_found`. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Validation error (`validation_error`, `category_not_found`, `category_archived`, or `currency_mismatch`). */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    expenses_delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Household ID. */
+                household_id: string;
+                /** @description Expense ID. */
+                expense_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Expense deleted. */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Missing, invalid, or expired access token (`unauthorized`). */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description `not_a_member`. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description `household_not_found` or `expense_not_found`. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    expenses_update: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Household ID. */
+                household_id: string;
+                /** @description Expense ID. */
+                expense_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UpdateExpenseRequest"];
+            };
+        };
+        responses: {
+            /** @description Updated expense. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Expense"];
+                };
+            };
+            /** @description Missing, invalid, or expired access token (`unauthorized`). */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description `not_a_member`. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description `household_not_found` or `expense_not_found`. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Validation error (`validation_error`, `category_not_found`, `category_archived`, or `currency_mismatch`). */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    expenses_get_summary: {
+        parameters: {
+            query: {
+                /** @description Calendar month of `spent_on`, `YYYY-MM`. */
+                month: string;
+            };
+            header?: never;
+            path: {
+                /** @description Household ID. */
+                household_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Month summary. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ExpenseSummary"];
+                };
+            };
+            /** @description Missing, invalid, or expired access token (`unauthorized`). */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description `not_a_member`. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description `household_not_found`. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Validation error (`validation_error`). */
+            422: {
                 headers: {
                     [name: string]: unknown;
                 };

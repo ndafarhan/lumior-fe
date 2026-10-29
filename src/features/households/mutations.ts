@@ -12,8 +12,8 @@ export function useCreateHousehold() {
   const queryClient = useQueryClient()
   const { setActive } = useHouseholds()
   return useMutation({
-    mutationFn: async (name: string) =>
-      (await client.POST('/api/v1/households', { body: { name } })).data!,
+    mutationFn: async (body: { name: string; currency: string }) =>
+      (await client.POST('/api/v1/households', { body })).data!,
     onSuccess: (created) => {
       // Add it right away so the app never sees the user without their new household.
       queryClient.setQueryData<Household[]>(HOUSEHOLDS_KEY, (list = []) => [...list, created])

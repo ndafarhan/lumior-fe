@@ -1,6 +1,7 @@
 import { useQuery } from '@tanstack/react-query'
 
 import { useApi } from '@/lib/api/context'
+import { householdKey } from '@/lib/api/query-keys'
 import type { components } from '@/lib/api/schema'
 
 export type Household = components['schemas']['Household']
@@ -11,11 +12,7 @@ export type InvitePreview = components['schemas']['InvitePreview']
 /** The user's households, not tied to any one household. */
 export const HOUSEHOLDS_KEY = ['households'] as const
 
-/**
- * Prefix for data that belongs to one household. Every household-scoped query key starts with
- * it, so switching households can drop the previous household's data in one call.
- */
-export const householdKey = (householdId: string) => ['household', householdId] as const
+export { householdKey }
 
 export function useHouseholdsQuery() {
   const { client } = useApi()

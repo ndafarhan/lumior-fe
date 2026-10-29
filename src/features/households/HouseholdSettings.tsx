@@ -45,6 +45,7 @@ export function HouseholdSettings() {
   return (
     <div className="grid max-w-2xl gap-6">
       <NameCard household={household} isOwner={isOwner} />
+      <CurrencyCard household={household} />
       <MembersCard household={household} isOwner={isOwner} />
       {isOwner && <InviteMember householdId={household.id} />}
       {!isOwner && <LeaveCard household={household} />}
@@ -112,6 +113,25 @@ function NameCard({ household, isOwner }: { household: Household; isOwner: boole
         ) : (
           <p>{household.name}</p>
         )}
+      </CardContent>
+    </Card>
+  )
+}
+
+/** The currency is set when the household is created and cannot be changed. */
+function CurrencyCard({ household }: { household: Household }) {
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle>
+          <h2>Currency</h2>
+        </CardTitle>
+        <CardDescription>
+          Every expense of this household uses this currency. It cannot be changed.
+        </CardDescription>
+      </CardHeader>
+      <CardContent>
+        <p>{household.currency}</p>
       </CardContent>
     </Card>
   )
