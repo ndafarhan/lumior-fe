@@ -1,7 +1,10 @@
 import { HttpResponse, http, type HttpHandler } from 'msw'
 
+import { CURRENCY_PRECISION } from '@/lib/money/currency'
+
 /**
- * In-memory implementation of the auth and households contract (`contracts/openapi.json`).
+ * In-memory implementation of the auth, households, and expenses contract
+ * (`contracts/openapi.json`).
  * Tests use it through MSW in Node; the dev mock mode uses it through the browser worker.
  *
  * It simulates one browser: the refresh cookie lives in `cookieJar` instead of a real cookie,
@@ -13,7 +16,26 @@ export type Role = 'owner' | 'member'
 type FakeUser = { id: string; email: string; name: string; password: string }
 /** `joinedAt` is a sequence number, so memberships created in the same millisecond still order. */
 type FakeMembership = { userId: string; role: Role; joinedAt: number }
-type FakeHousehold = { id: string; name: string; members: FakeMembership[] }
+type FakeCategory = { id: string; name: string; archived: boolean }
+type FakeHousehold = {
+  id: string
+  name: string
+  currency: string
+  members: FakeMembership[]
+  categories: FakeCategory[]
+}
+/** `amount` is a decimal string with the currency's decimal places; `seq` orders same-day entries. */
+type FakeExpense = {
+  id: string
+  householdId: string
+  amount: string
+  spentOn: string
+  categoryId: string
+  note: string | null
+  createdAt: number
+  updatedAt: number
+  seq: number
+}
 type FakeInvite = {
   code: string
   householdId: string
@@ -27,6 +49,7 @@ export type FakeState = {
   users: FakeUser[]
   households: FakeHousehold[]
   invites: FakeInvite[]
+  expenses: FakeExpense[]
   refreshTokens: Record<string, FakeRefreshToken>
   accessTokens: Record<string, string>
   cookieJar: string | null
@@ -38,11 +61,27 @@ export const INVITE_TTL_MS = 7 * 24 * 60 * 60 * 1000
 /** A refresh token replaced less than this long ago is still accepted (concurrent tabs). */
 export const REFRESH_GRACE_MS = 30_000
 
+/** Every household starts with these categories (`contracts/expenses.md`). */
+export const DEFAULT_EXPENSE_CATEGORIES = [
+  'Groceries',
+  'Dining out',
+  'Transport',
+  'Utilities',
+  'Housing',
+  'Health',
+  'Education',
+  'Entertainment',
+  'Other',
+] as const
+
+export const DEFAULT_EXPENSE_PAGE_SIZE = 50
+
 function emptyState(): FakeState {
   return {
     users: [],
     households: [],
     invites: [],
+    expenses: [],
     refreshTokens: {},
     accessTokens: {},
     cookieJar: null,
@@ -96,6 +135,43 @@ async function readJson(request: Request): Promise<Record<string, unknown>> {
   }
 }
 
+const DECIMAL = /^(\d+)(?:\.(\d+))?$/
+const MONTH = /^(\d{4})-(0[1-9]|1[0-2])$/
+const DATE = /^\d{4}-\d{2}-\d{2}$/
+const DAY_MS = 24 * 60 * 60 * 1000
+
+/** `"12.5"` → `1250n` for a currency with 2 decimal places. The input must match `DECIMAL`. */
+function toMinorUnits(amount: string, precision: number): bigint {
+  const [, integer = '0', fraction = ''] = DECIMAL.exec(amount)!
+  return BigInt(integer + fraction.padEnd(precision, '0'))
+}
+
+/** `1250n` → `"12.50"` for a currency with 2 decimal places. */
+function fromMinorUnits(units: bigint, precision: number): string {
+  const digits = units.toString().padStart(precision + 1, '0')
+  if (precision === 0) return digits
+  return `${digits.slice(0, -precision)}.${digits.slice(-precision)}`
+}
+
+/** Whether `value` is a real calendar date written as `YYYY-MM-DD`. */
+function isDate(value: unknown): value is string {
+  if (typeof value !== 'string' || !DATE.test(value)) return false
+  const date = new Date(`${value}T00:00:00Z`)
+  return !Number.isNaN(date.getTime()) && date.toISOString().slice(0, 10) === value
+}
+
+function categoryNameIssue(value: unknown): ErrorDetail | null {
+  const trimmed = typeof value === 'string' ? value.trim() : ''
+  if (trimmed.length < 1 || trimmed.length > 50) {
+    return {
+      location: ['body', 'name'],
+      reason: 'Must be 1 to 50 characters.',
+      type: 'string_length',
+    }
+  }
+  return null
+}
+
 export class FakeBackend {
   state: FakeState = emptyState()
   /** Milliseconds since the epoch; tests can move it to expire invites. */
@@ -111,8 +187,22 @@ export class FakeBackend {
     this.calls.length = 0
   }
 
+  /** Loads saved state, filling in what state saved by an older version lacks. */
   load(state: FakeState) {
+    state.expenses ??= []
+    for (const household of state.households) {
+      household.currency ??= 'IDR'
+      household.categories ??= this.defaultCategories(state)
+    }
     this.state = state
+  }
+
+  private defaultCategories(state = this.state): FakeCategory[] {
+    return DEFAULT_EXPENSE_CATEGORIES.map((name) => ({
+      id: `cat-${state.nextId++}`,
+      name,
+      archived: false,
+    }))
   }
 
   private id(prefix: string) {
@@ -132,10 +222,17 @@ export class FakeBackend {
     return user
   }
 
-  addHousehold(name: string, ownerId: string, memberIds: string[] = []): FakeHousehold {
+  addHousehold(
+    name: string,
+    ownerId: string,
+    memberIds: string[] = [],
+    currency = 'IDR',
+  ): FakeHousehold {
     const household: FakeHousehold = {
       id: this.id('h'),
       name,
+      currency,
+      categories: this.defaultCategories(),
       members: [
         { userId: ownerId, role: 'owner', joinedAt: this.state.nextId++ },
         ...memberIds.map((userId) => ({
@@ -161,6 +258,55 @@ export class FakeBackend {
     this.state.invites.push(invite)
     this.changed()
     return invite
+  }
+
+  /** Adds a category, or returns the existing one with that name. */
+  addCategory(householdId: string, name: string, { archived = false } = {}): FakeCategory {
+    const household = this.household(householdId)!
+    let category = household.categories.find((c) => c.name.toLowerCase() === name.toLowerCase())
+    if (!category) {
+      category = { id: this.id('cat'), name, archived }
+      household.categories.push(category)
+    }
+    category.archived = archived
+    this.changed()
+    return category
+  }
+
+  /** The household's category with that name. Throws if there is none. */
+  category(householdId: string, name: string): FakeCategory {
+    const category = this.household(householdId)?.categories.find((c) => c.name === name)
+    if (!category) throw new Error(`No category "${name}" in household ${householdId}`)
+    return category
+  }
+
+  /**
+   * Adds an expense. `amount` is a plain decimal string in the household currency, and
+   * `category` a category name (created when missing).
+   */
+  addExpense(
+    householdId: string,
+    input: { amount: string; spentOn: string; category: string; note?: string | null },
+  ): FakeExpense {
+    const household = this.household(householdId)!
+    const category =
+      household.categories.find((c) => c.name === input.category) ??
+      this.addCategory(householdId, input.category)
+    const precision = CURRENCY_PRECISION[household.currency] ?? 2
+    const expense: FakeExpense = {
+      id: this.id('exp'),
+      householdId,
+      amount: fromMinorUnits(toMinorUnits(input.amount, precision), precision),
+      spentOn: input.spentOn,
+      categoryId: category.id,
+      note: input.note ?? null,
+      createdAt: this.now(),
+      updatedAt: this.now(),
+      seq: this.state.nextId++,
+    }
+    this.state.expenses.push(expense)
+    this.changed()
+    return expense
   }
 
   /** Puts a valid refresh cookie in the simulated browser, as if the user had signed in. */
@@ -232,7 +378,156 @@ export class FakeBackend {
       name: household.name,
       role: this.membership(household, userId)!.role,
       member_count: household.members.length,
+      currency: household.currency,
     }
+  }
+
+  private money(household: FakeHousehold, amount: string) {
+    return { amount, currency: household.currency }
+  }
+
+  private expenseView(household: FakeHousehold, expense: FakeExpense) {
+    return {
+      id: expense.id,
+      amount: this.money(household, expense.amount),
+      spent_on: expense.spentOn,
+      category_id: expense.categoryId,
+      note: expense.note,
+      created_at: new Date(expense.createdAt).toISOString(),
+      updated_at: new Date(expense.updatedAt).toISOString(),
+    }
+  }
+
+  /**
+   * Checks an expense body against the contract's rules. `current` is the expense being
+   * updated: omitted fields keep its values, and its own archived category stays allowed.
+   */
+  private checkExpense(
+    household: FakeHousehold,
+    body: Record<string, unknown>,
+    current?: FakeExpense,
+  ):
+    | { error: Response }
+    | { amount?: string; spentOn?: string; categoryId?: string; note?: string | null } {
+    const issues: ErrorDetail[] = []
+    const result: { amount?: string; spentOn?: string; categoryId?: string; note?: string | null } =
+      {}
+    const precision = CURRENCY_PRECISION[household.currency] ?? 2
+
+    if (!current || 'amount' in body) {
+      const money = body.amount as { amount?: unknown; currency?: unknown } | undefined
+      const match = typeof money?.amount === 'string' ? DECIMAL.exec(money.amount) : null
+      if (!match) {
+        issues.push({
+          location: ['body', 'amount', 'amount'],
+          reason: 'Must be a decimal string.',
+          type: 'decimal',
+        })
+      } else if ((match[2] ?? '').length > precision) {
+        issues.push({
+          location: ['body', 'amount', 'amount'],
+          reason: `At most ${precision} decimal places.`,
+          type: 'decimal',
+        })
+      } else if (match[1]!.replace(/^0+(?=\d)/, '').length > 12) {
+        issues.push({
+          location: ['body', 'amount', 'amount'],
+          reason: 'At most 12 digits before the decimal point.',
+          type: 'decimal',
+        })
+      } else if (toMinorUnits(money!.amount as string, precision) <= 0n) {
+        issues.push({
+          location: ['body', 'amount', 'amount'],
+          reason: 'Must be greater than 0.',
+          type: 'greater_than',
+        })
+      } else if (money!.currency !== household.currency) {
+        return {
+          error: errorResponse(
+            422,
+            'currency_mismatch',
+            'Expenses must use the household currency.',
+            [
+              {
+                location: ['body', 'amount', 'currency'],
+                reason: `Must be ${household.currency}.`,
+                type: 'currency_mismatch',
+              },
+            ],
+          ),
+        }
+      } else {
+        result.amount = fromMinorUnits(toMinorUnits(money!.amount as string, precision), precision)
+      }
+    }
+
+    if (!current || 'spent_on' in body) {
+      const latest = new Date(this.now() + DAY_MS).toISOString().slice(0, 10)
+      if (!isDate(body.spent_on) || body.spent_on < '2000-01-01' || body.spent_on > latest) {
+        issues.push({
+          location: ['body', 'spent_on'],
+          reason: 'Must be a date between 2000-01-01 and today.',
+          type: 'date',
+        })
+      } else {
+        result.spentOn = body.spent_on
+      }
+    }
+
+    if (!current || 'note' in body) {
+      const note = body.note
+      if (note !== undefined && note !== null && typeof note !== 'string') {
+        issues.push({
+          location: ['body', 'note'],
+          reason: 'Must be a string.',
+          type: 'string_type',
+        })
+      } else if (typeof note === 'string' && note.trim().length > 500) {
+        issues.push({
+          location: ['body', 'note'],
+          reason: 'At most 500 characters.',
+          type: 'string_length',
+        })
+      } else {
+        result.note = typeof note === 'string' && note.trim() ? note.trim() : null
+      }
+    }
+
+    if (issues.length) return { error: validationError(issues) }
+
+    if (!current || 'category_id' in body) {
+      const category = household.categories.find((c) => c.id === body.category_id)
+      const location = ['body', 'category_id']
+      if (!category) {
+        return {
+          error: errorResponse(422, 'category_not_found', 'This category does not exist.', [
+            { location, reason: 'Unknown category.', type: 'category_not_found' },
+          ]),
+        }
+      }
+      if (category.archived && category.id !== current?.categoryId) {
+        return {
+          error: errorResponse(422, 'category_archived', 'This category is archived.', [
+            { location, reason: 'This category is archived.', type: 'category_archived' },
+          ]),
+        }
+      }
+      result.categoryId = category.id
+    }
+    return result
+  }
+
+  /** The household's expenses in `month`, newest first (date, then recording order). */
+  private monthExpenses(household: FakeHousehold, month: string) {
+    return this.state.expenses
+      .filter((e) => e.householdId === household.id && e.spentOn.startsWith(`${month}-`))
+      .sort((a, b) => (a.spentOn === b.spentOn ? b.seq - a.seq : a.spentOn < b.spentOn ? 1 : -1))
+  }
+
+  private monthIssue(value: string | null): ErrorDetail | null {
+    return value && MONTH.test(value)
+      ? null
+      : { location: ['query', 'month'], reason: 'Must be YYYY-MM.', type: 'pattern' }
   }
 
   // --- Handlers ------------------------------------------------------------------------------
@@ -411,9 +706,24 @@ export class FakeBackend {
         url('/households'),
         authed(async ({ request, user }) => {
           const body = await readJson(request)
-          const issue = nameIssue('name', body.name)
-          if (issue) return validationError([issue])
-          const household = this.addHousehold((body.name as string).trim(), user.id)
+          const currency = body.currency ?? 'IDR'
+          const issues = [
+            nameIssue('name', body.name),
+            typeof currency === 'string' && currency in CURRENCY_PRECISION
+              ? null
+              : {
+                  location: ['body', 'currency'],
+                  reason: 'Unsupported currency.',
+                  type: 'value_error',
+                },
+          ].filter((issue): issue is ErrorDetail => issue !== null)
+          if (issues.length) return validationError(issues)
+          const household = this.addHousehold(
+            (body.name as string).trim(),
+            user.id,
+            [],
+            currency as string,
+          )
           return HttpResponse.json(this.householdView(household, user.id), { status: 201 })
         }),
       ),
@@ -504,6 +814,212 @@ export class FakeBackend {
           invite.usedBy = user.id
           this.changed()
           return HttpResponse.json(this.householdView(household, user.id))
+        }),
+      ),
+
+      ...this.expenseHandlers(url, member),
+    ]
+  }
+
+  private expenseHandlers(
+    url: (path: string) => string,
+    member: (
+      handler: (args: {
+        request: Request
+        params: Record<string, string>
+        household: FakeHousehold
+      }) => Response | Promise<Response>,
+    ) => (args: {
+      request: Request
+      params: Record<string, unknown>
+    }) => Response | Promise<Response>,
+  ): HttpHandler[] {
+    const sortedCategories = (household: FakeHousehold) =>
+      [...household.categories].sort((a, b) =>
+        a.name.toLowerCase().localeCompare(b.name.toLowerCase()),
+      )
+    const nameTaken = (household: FakeHousehold, name: string, exceptId?: string) =>
+      household.categories.some(
+        (c) => c.id !== exceptId && c.name.toLowerCase() === name.toLowerCase(),
+      )
+    const nameTakenError = () =>
+      errorResponse(409, 'category_name_taken', 'A category with this name already exists.', [
+        { location: ['body', 'name'], reason: 'Already used.', type: 'category_name_taken' },
+      ])
+    const expenseNotFound = () =>
+      errorResponse(404, 'expense_not_found', 'This expense does not exist.')
+    const findExpense = (household: FakeHousehold, id: string) =>
+      this.state.expenses.find((e) => e.id === id && e.householdId === household.id)
+
+    return [
+      http.get(
+        url('/households/:household_id/expense-categories'),
+        member(({ household }) => HttpResponse.json(sortedCategories(household))),
+      ),
+
+      http.post(
+        url('/households/:household_id/expense-categories'),
+        member(async ({ request, household }) => {
+          const body = await readJson(request)
+          const issue = categoryNameIssue(body.name)
+          if (issue) return validationError([issue])
+          const name = (body.name as string).trim()
+          if (nameTaken(household, name)) return nameTakenError()
+          const category = { id: this.id('cat'), name, archived: false }
+          household.categories.push(category)
+          this.changed()
+          return HttpResponse.json(category, { status: 201 })
+        }),
+      ),
+
+      http.patch(
+        url('/households/:household_id/expense-categories/:category_id'),
+        member(async ({ request, params, household }) => {
+          const category = household.categories.find((c) => c.id === params.category_id)
+          if (!category) return errorResponse(404, 'category_not_found', 'Category not found.')
+          const body = await readJson(request)
+          const issues: ErrorDetail[] = []
+          if ('name' in body) {
+            const issue = categoryNameIssue(body.name)
+            if (issue) issues.push(issue)
+          }
+          if ('archived' in body && typeof body.archived !== 'boolean') {
+            issues.push({
+              location: ['body', 'archived'],
+              reason: 'Must be a boolean.',
+              type: 'bool_type',
+            })
+          }
+          if (issues.length) return validationError(issues)
+          if ('name' in body) {
+            const name = (body.name as string).trim()
+            if (nameTaken(household, name, category.id)) return nameTakenError()
+            category.name = name
+          }
+          if ('archived' in body) category.archived = body.archived as boolean
+          this.changed()
+          return HttpResponse.json(category)
+        }),
+      ),
+
+      http.get(
+        url('/households/:household_id/expenses'),
+        member(({ request, household }) => {
+          const query = new URL(request.url).searchParams
+          const month = query.get('month')
+          const issues: ErrorDetail[] = []
+          const monthIssue = this.monthIssue(month)
+          if (monthIssue) issues.push(monthIssue)
+          const limit = query.has('limit') ? Number(query.get('limit')) : DEFAULT_EXPENSE_PAGE_SIZE
+          if (!Number.isInteger(limit) || limit < 1 || limit > 100) {
+            issues.push({
+              location: ['query', 'limit'],
+              reason: 'Must be 1 to 100.',
+              type: 'range',
+            })
+          }
+          const cursor = query.get('cursor')
+          const start = cursor === null ? 0 : Number(cursor)
+          if (cursor !== null && (!/^\d+$/.test(cursor) || !Number.isSafeInteger(start))) {
+            issues.push({
+              location: ['query', 'cursor'],
+              reason: 'Invalid cursor.',
+              type: 'value_error',
+            })
+          }
+          if (issues.length) return validationError(issues)
+
+          const categoryId = query.get('category_id')
+          const matching = this.monthExpenses(household, month!).filter(
+            (e) => categoryId === null || e.categoryId === categoryId,
+          )
+          const end = start + limit
+          return HttpResponse.json({
+            items: matching.slice(start, end).map((e) => this.expenseView(household, e)),
+            next_cursor: end < matching.length ? String(end) : null,
+          })
+        }),
+      ),
+
+      http.post(
+        url('/households/:household_id/expenses'),
+        member(async ({ request, household }) => {
+          const checked = this.checkExpense(household, await readJson(request))
+          if ('error' in checked) return checked.error
+          const expense: FakeExpense = {
+            id: this.id('exp'),
+            householdId: household.id,
+            amount: checked.amount!,
+            spentOn: checked.spentOn!,
+            categoryId: checked.categoryId!,
+            note: checked.note ?? null,
+            createdAt: this.now(),
+            updatedAt: this.now(),
+            seq: this.state.nextId++,
+          }
+          this.state.expenses.push(expense)
+          this.changed()
+          return HttpResponse.json(this.expenseView(household, expense), { status: 201 })
+        }),
+      ),
+
+      http.patch(
+        url('/households/:household_id/expenses/:expense_id'),
+        member(async ({ request, params, household }) => {
+          const expense = findExpense(household, params.expense_id!)
+          if (!expense) return expenseNotFound()
+          const checked = this.checkExpense(household, await readJson(request), expense)
+          if ('error' in checked) return checked.error
+          if (checked.amount !== undefined) expense.amount = checked.amount
+          if (checked.spentOn !== undefined) expense.spentOn = checked.spentOn
+          if (checked.categoryId !== undefined) expense.categoryId = checked.categoryId
+          if (checked.note !== undefined) expense.note = checked.note
+          expense.updatedAt = this.now()
+          this.changed()
+          return HttpResponse.json(this.expenseView(household, expense))
+        }),
+      ),
+
+      http.delete(
+        url('/households/:household_id/expenses/:expense_id'),
+        member(({ params, household }) => {
+          const expense = findExpense(household, params.expense_id!)
+          if (!expense) return expenseNotFound()
+          this.state.expenses = this.state.expenses.filter((e) => e !== expense)
+          this.changed()
+          return new HttpResponse(null, { status: 204 })
+        }),
+      ),
+
+      http.get(
+        url('/households/:household_id/expense-summary'),
+        member(({ request, household }) => {
+          const month = new URL(request.url).searchParams.get('month')
+          const issue = this.monthIssue(month)
+          if (issue) return validationError([issue])
+          const precision = CURRENCY_PRECISION[household.currency] ?? 2
+          let total = 0n
+          const perCategory = new Map<string, { total: bigint; count: number }>()
+          for (const expense of this.monthExpenses(household, month!)) {
+            const units = toMinorUnits(expense.amount, precision)
+            total += units
+            const entry = perCategory.get(expense.categoryId) ?? { total: 0n, count: 0 }
+            entry.total += units
+            entry.count += 1
+            perCategory.set(expense.categoryId, entry)
+          }
+          const categories = [...perCategory.entries()]
+            .sort(([, a], [, b]) => (a.total === b.total ? 0 : a.total < b.total ? 1 : -1))
+            .map(([categoryId, entry]) => ({
+              category_id: categoryId,
+              total: this.money(household, fromMinorUnits(entry.total, precision)),
+              count: entry.count,
+            }))
+          return HttpResponse.json({
+            month,
+            total: this.money(household, fromMinorUnits(total, precision)),
+            categories,
+          })
         }),
       ),
     ]

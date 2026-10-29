@@ -11,6 +11,7 @@ import { AccountPage } from '@/routes/account'
 import { BudgetsPage } from '@/routes/budgets'
 import { CatalogPage } from '@/routes/catalog'
 import { DashboardPage } from '@/routes/dashboard'
+import { ExpenseCategoriesPage } from '@/routes/expense-categories'
 import { ExpensesPage } from '@/routes/expenses'
 import { HouseholdPage } from '@/routes/household'
 import { NotFoundPage } from '@/routes/not-found'
@@ -25,6 +26,11 @@ const layoutPages: RouteObject[] = [
   { index: true, element: <DashboardPage />, handle: page('Dashboard') },
   { path: 'budgets', element: <BudgetsPage />, handle: page('Budgets') },
   { path: 'expenses', element: <ExpensesPage />, handle: page('Expenses') },
+  {
+    path: 'expenses/categories',
+    element: <ExpenseCategoriesPage />,
+    handle: page('Expense categories'),
+  },
   { path: 'catalog', element: <CatalogPage />, handle: page('Catalog') },
   { path: 'shopping-lists', element: <ShoppingListsPage />, handle: page('Shopping Lists') },
   { path: 'optimize', element: <OptimizePage />, handle: page('Optimize') },

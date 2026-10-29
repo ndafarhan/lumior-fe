@@ -41,6 +41,19 @@ describe('household settings', () => {
     ])
   })
 
+  test('shows the currency without a way to change it', async () => {
+    seedOwner()
+    renderApp('/household', { session: null })
+    await settingsHeading()
+
+    const card = screen
+      .getByRole('heading', { level: 2, name: 'Currency' })
+      .closest('[data-slot="card"]')
+    expect(within(card as HTMLElement).getByText('IDR')).toBeInTheDocument()
+    expect(screen.queryByLabelText('Currency')).not.toBeInTheDocument()
+    expect(within(card as HTMLElement).queryByRole('button')).not.toBeInTheDocument()
+  })
+
   test('the owner renames the household', async () => {
     seedOwner()
     const user = userEvent.setup()

@@ -3,7 +3,7 @@
   "info": {
     "title": "Lumior API",
     "version": "0.1.0",
-    "description": "DRAFT contract proposed by lumior-fe (auth-and-households). See contracts/auth-and-households.md. Replace with the backend's published document once it exists."
+    "description": "DRAFT contract proposed by lumior-fe (auth-and-households, expenses). See contracts/auth-and-households.md and contracts/expenses.md. Replace with the backend's published document once it exists."
   },
   "paths": {
     "/api/v1/auth/register": {
@@ -414,7 +414,7 @@
           "content": {
             "application/json": {
               "schema": {
-                "$ref": "#/components/schemas/HouseholdNameRequest"
+                "$ref": "#/components/schemas/CreateHouseholdRequest"
               }
             }
           }
@@ -855,6 +855,713 @@
           }
         ]
       }
+    },
+    "/api/v1/households/{household_id}/expense-categories": {
+      "get": {
+        "operationId": "expenses_list_categories",
+        "summary": "List the household's expense categories, active and archived, by name",
+        "tags": ["expenses"],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "household_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Household ID."
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Categories.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/ExpenseCategory"
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing, invalid, or expired access token (`unauthorized`).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "`not_a_member`.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "`household_not_found`.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "operationId": "expenses_create_category",
+        "summary": "Add an expense category",
+        "tags": ["expenses"],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "household_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Household ID."
+          }
+        ],
+        "responses": {
+          "201": {
+            "description": "Created category.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ExpenseCategory"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing, invalid, or expired access token (`unauthorized`).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "`not_a_member`.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "`household_not_found`.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "`category_name_taken`.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation error (`validation_error`).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateExpenseCategoryRequest"
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/households/{household_id}/expense-categories/{category_id}": {
+      "patch": {
+        "operationId": "expenses_update_category",
+        "summary": "Rename, archive, or restore an expense category",
+        "tags": ["expenses"],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "household_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Household ID."
+          },
+          {
+            "name": "category_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Expense category ID."
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Updated category.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ExpenseCategory"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing, invalid, or expired access token (`unauthorized`).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "`not_a_member`.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "`household_not_found` or `category_not_found`.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "`category_name_taken`.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation error (`validation_error`).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateExpenseCategoryRequest"
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/households/{household_id}/expenses": {
+      "get": {
+        "operationId": "expenses_list",
+        "summary": "List a month's expenses, newest first",
+        "tags": ["expenses"],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "household_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Household ID."
+          },
+          {
+            "name": "month",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "pattern": "^[0-9]{4}-(0[1-9]|1[0-2])$"
+            },
+            "description": "Calendar month of `spent_on`, `YYYY-MM`."
+          },
+          {
+            "name": "category_id",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Only this category's expenses."
+          },
+          {
+            "name": "cursor",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "description": "`next_cursor` of the previous page."
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 100,
+              "default": 50
+            },
+            "description": "Page size."
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "A page of expenses.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ExpensePage"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing, invalid, or expired access token (`unauthorized`).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "`not_a_member`.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "`household_not_found`.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation error (`validation_error`).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "operationId": "expenses_create",
+        "summary": "Record an expense",
+        "tags": ["expenses"],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "household_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Household ID."
+          }
+        ],
+        "responses": {
+          "201": {
+            "description": "Created expense.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Expense"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing, invalid, or expired access token (`unauthorized`).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "`not_a_member`.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "`household_not_found`.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation error (`validation_error`, `category_not_found`, `category_archived`, or `currency_mismatch`).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateExpenseRequest"
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/households/{household_id}/expenses/{expense_id}": {
+      "patch": {
+        "operationId": "expenses_update",
+        "summary": "Change an expense",
+        "tags": ["expenses"],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "household_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Household ID."
+          },
+          {
+            "name": "expense_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Expense ID."
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Updated expense.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Expense"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing, invalid, or expired access token (`unauthorized`).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "`not_a_member`.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "`household_not_found` or `expense_not_found`.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation error (`validation_error`, `category_not_found`, `category_archived`, or `currency_mismatch`).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateExpenseRequest"
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "operationId": "expenses_delete",
+        "summary": "Delete an expense",
+        "tags": ["expenses"],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "household_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Household ID."
+          },
+          {
+            "name": "expense_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Expense ID."
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Expense deleted."
+          },
+          "401": {
+            "description": "Missing, invalid, or expired access token (`unauthorized`).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "`not_a_member`.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "`household_not_found` or `expense_not_found`.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/households/{household_id}/expense-summary": {
+      "get": {
+        "operationId": "expenses_get_summary",
+        "summary": "Total and per-category totals of a month's expenses",
+        "tags": ["expenses"],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "household_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Household ID."
+          },
+          {
+            "name": "month",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "pattern": "^[0-9]{4}-(0[1-9]|1[0-2])$"
+            },
+            "description": "Calendar month of `spent_on`, `YYYY-MM`."
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Month summary.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ExpenseSummary"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing, invalid, or expired access token (`unauthorized`).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "`not_a_member`.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "`household_not_found`.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation error (`validation_error`).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
     }
   },
   "components": {
@@ -1005,7 +1712,7 @@
       },
       "Household": {
         "type": "object",
-        "required": ["id", "name", "role", "member_count"],
+        "required": ["id", "name", "role", "member_count", "currency"],
         "properties": {
           "id": {
             "type": "string"
@@ -1018,6 +1725,11 @@
           },
           "member_count": {
             "type": "integer"
+          },
+          "currency": {
+            "type": "string",
+            "pattern": "^[A-Z]{3}$",
+            "description": "The household's currency, set when it is created. Every expense uses it."
           }
         }
       },
@@ -1090,6 +1802,208 @@
           },
           "already_member": {
             "type": "boolean"
+          }
+        }
+      },
+      "Money": {
+        "type": "object",
+        "required": ["amount", "currency"],
+        "properties": {
+          "amount": {
+            "type": "string",
+            "pattern": "^-?[0-9]+(\\.[0-9]+)?$",
+            "description": "Decimal string, rounded to the currency's precision. Never a JSON number."
+          },
+          "currency": {
+            "type": "string",
+            "pattern": "^[A-Z]{3}$",
+            "description": "ISO 4217 code."
+          }
+        }
+      },
+      "CreateHouseholdRequest": {
+        "type": "object",
+        "required": ["name"],
+        "properties": {
+          "name": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 100,
+            "description": "1-100 characters after trimming."
+          },
+          "currency": {
+            "type": "string",
+            "pattern": "^[A-Z]{3}$",
+            "description": "A supported currency (CURRENCY_PRECISION). Defaults to IDR. Cannot be changed later."
+          }
+        }
+      },
+      "ExpenseCategory": {
+        "type": "object",
+        "required": ["id", "name", "archived"],
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "archived": {
+            "type": "boolean"
+          }
+        }
+      },
+      "CreateExpenseCategoryRequest": {
+        "type": "object",
+        "required": ["name"],
+        "properties": {
+          "name": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 50,
+            "description": "1-50 characters after trimming. Unique in the household, ignoring case."
+          }
+        }
+      },
+      "UpdateExpenseCategoryRequest": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 50,
+            "description": "1-50 characters after trimming. Unique in the household, ignoring case."
+          },
+          "archived": {
+            "type": "boolean"
+          }
+        }
+      },
+      "Expense": {
+        "type": "object",
+        "required": ["id", "amount", "spent_on", "category_id", "note", "created_at", "updated_at"],
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "amount": {
+            "$ref": "#/components/schemas/Money"
+          },
+          "spent_on": {
+            "type": "string",
+            "format": "date"
+          },
+          "category_id": {
+            "type": "string"
+          },
+          "note": {
+            "type": ["string", "null"]
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "updated_at": {
+            "type": "string",
+            "format": "date-time"
+          }
+        }
+      },
+      "CreateExpenseRequest": {
+        "type": "object",
+        "required": ["amount", "spent_on", "category_id"],
+        "properties": {
+          "amount": {
+            "$ref": "#/components/schemas/Money",
+            "description": "Greater than 0, at most 12 digits before the decimal point, in the household currency."
+          },
+          "spent_on": {
+            "type": "string",
+            "format": "date",
+            "description": "Not before 2000-01-01 and not more than one day after the server's UTC date."
+          },
+          "category_id": {
+            "type": "string",
+            "description": "An active category of the household."
+          },
+          "note": {
+            "type": ["string", "null"],
+            "maxLength": 500,
+            "description": "At most 500 characters after trimming. Empty is stored as null."
+          }
+        }
+      },
+      "UpdateExpenseRequest": {
+        "type": "object",
+        "properties": {
+          "amount": {
+            "$ref": "#/components/schemas/Money",
+            "description": "Greater than 0, at most 12 digits before the decimal point, in the household currency."
+          },
+          "spent_on": {
+            "type": "string",
+            "format": "date",
+            "description": "Not before 2000-01-01 and not more than one day after the server's UTC date."
+          },
+          "category_id": {
+            "type": "string",
+            "description": "Changing it to an archived category is `category_archived`."
+          },
+          "note": {
+            "type": ["string", "null"],
+            "maxLength": 500,
+            "description": "At most 500 characters after trimming. Empty is stored as null."
+          }
+        }
+      },
+      "ExpensePage": {
+        "type": "object",
+        "required": ["items", "next_cursor"],
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Expense"
+            }
+          },
+          "next_cursor": {
+            "type": ["string", "null"],
+            "description": "Opaque. Pass as `cursor` for the next page. Null on the last page."
+          }
+        }
+      },
+      "ExpenseCategoryTotal": {
+        "type": "object",
+        "required": ["category_id", "total", "count"],
+        "properties": {
+          "category_id": {
+            "type": "string"
+          },
+          "total": {
+            "$ref": "#/components/schemas/Money"
+          },
+          "count": {
+            "type": "integer"
+          }
+        }
+      },
+      "ExpenseSummary": {
+        "type": "object",
+        "required": ["month", "total", "categories"],
+        "properties": {
+          "month": {
+            "type": "string",
+            "pattern": "^[0-9]{4}-(0[1-9]|1[0-2])$"
+          },
+          "total": {
+            "$ref": "#/components/schemas/Money"
+          },
+          "categories": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ExpenseCategoryTotal"
+            },
+            "description": "Categories with expenses in the month, highest total first."
           }
         }
       }

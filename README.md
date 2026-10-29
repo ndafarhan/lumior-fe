@@ -79,8 +79,9 @@ A backend change that breaks the frontend then shows up as a `npm run typecheck`
 ### Draft contracts
 
 When the frontend needs endpoints the backend has not built yet, the proposed contract lives in
-`contracts/`: a readable version for the backend team (`contracts/auth-and-households.md`) and
-an OpenAPI document (`contracts/openapi.json`). The committed types are generated from the draft
+`contracts/`: a readable version per change for the backend team
+(`contracts/auth-and-households.md`, `contracts/expenses.md`) and one OpenAPI document with all of
+them (`contracts/openapi.json`). The committed types are generated from the draft
 until the backend publishes the real document:
 
 ```bash
@@ -101,6 +102,7 @@ src/
     auth/           session restore, sign-in and registration pages, sign-out
     account/        account settings (display name, password)
     households/     households list, active household, settings, invites
+    expenses/       monthly expenses, totals, expense form, categories page
   components/       shared components; ui/ holds shadcn/ui primitives
   lib/
     api/            typed client, ApiError, retry policy, health check, generated schema
@@ -125,10 +127,25 @@ everything else                needs a session (signed-out visitors go to /login
 ### Households
 
 Every signed-in page can read the active household with `useActiveHousehold()` from
-`features/households/context`. Data that belongs to one household must use a query key that
-starts with `householdKey(householdId)` (`['household', id, ...]`): switching households removes
-those queries, so one household's data never shows up in another. Requests that fail with
-`not_a_member` or `household_not_found` make the app reload the list and choose another household.
+`features/households/context`. Other features do not import it: their route reads it and passes
+the household in as a prop (see `routes/expenses.tsx`). Data that belongs to one household must
+use a query key that starts with `householdKey(householdId)` from `lib/api/query-keys.ts`
+(`['household', id, ...]`): switching households removes those queries, so one household's data
+never shows up in another. Requests that fail with `not_a_member` or `household_not_found` make
+the app reload the list and choose another household.
+
+### Expenses
+
+- `/expenses?month=YYYY-MM&category=<id>` shows one month. The month and the filter live in the
+  URL. Months and dates are `YYYY-MM` and `YYYY-MM-DD` strings (`features/expenses/month.ts`);
+  "today" comes from the local calendar, never from `toISOString()`.
+- Totals come from `GET .../expense-summary`. The frontend never adds amounts.
+- Query keys (`features/expenses/api.ts`, all under `householdKey(id)`): `expense-categories`,
+  `expenses` + month + category id (an infinite query over `next_cursor`), and
+  `expense-summary` + month. Every expense change invalidates all lists and summaries of the
+  household, since an edit can move an expense to another month.
+- `/expenses/categories` adds, renames, archives, and restores categories. Archived categories
+  are offered only in the filter and for an expense that already has one.
 
 ### Dependency rule
 
